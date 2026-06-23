@@ -3929,6 +3929,15 @@
     }
 
     // 安全设置深层值
+    // 已知数组字段（不能设为非数组）
+    var _ARRAY_FIELDS = ['supply', 'classes', 'services', 'culture', 'income_items', 'expense_items', 'enterprises'
+      , 'resources', 'payments', 'reserve_items', 'factions', 'institutions', 'amendments', 'laws', 'constitution'
+      , 'trade', 'domestic_industries', 'infrastructure', 'relations', 'multilateral', 'treaties', 'intl_orgs'
+      , 'un_council', 'un_resolutions', 'un_sanctions', 'units', 'equipment_items', 'programs', 'groups'
+      , 'departments', 'projects', 'policies', 'notes', 'local_gov', 'npcs', 'news_items', 'regions', 'provinces'
+      , 'cities', 'facilities', 'neighbors', 'items'
+    ];
+
     function setDeep(obj, path, value) {
       var keys = path.split('.');
       var cur = obj;
@@ -3943,6 +3952,11 @@
         if (!cur[arrMatch[1]]) cur[arrMatch[1]] = [];
         cur[arrMatch[1]][parseInt(arrMatch[2])] = value;
       } else {
+        // 保护数组字段不被非数组覆盖
+        if (_ARRAY_FIELDS.indexOf(lastKey) >= 0 && !Array.isArray(value)) {
+          console.warn('setDeep: 数组字段 ' + lastKey + ' 收到非数组值，已忽略:', JSON.stringify(value).substring(0, 80));
+          return;
+        }
         cur[lastKey] = value;
       }
     }
@@ -4057,9 +4071,9 @@
       soc._score = null;
 
       var scores = [], total = 0;
-      if (soc.supply && soc.supply.length > 0) soc.supply.forEach(function (s) { var v = parseFloat(s.satisfaction); if (!isNaN(v)) { scores.push(v); total += v; } });
-      if (soc.classes && soc.classes.length > 0) soc.classes.forEach(function (c) { var v = parseFloat(c.satisfaction); if (!isNaN(v)) { scores.push(v); total += v; } });
-      if (soc.services && soc.services.length > 0) soc.services.forEach(function (s) { var v = parseFloat(s.satisfaction); if (!isNaN(v)) { scores.push(v); total += v; } });
+      if (soc.supply && Array.isArray(soc.supply)) soc.supply.forEach(function (s) { var v = parseFloat(s.satisfaction); if (!isNaN(v)) { scores.push(v); total += v; } });
+      if (soc.classes && Array.isArray(soc.classes)) soc.classes.forEach(function (c) { var v = parseFloat(c.satisfaction); if (!isNaN(v)) { scores.push(v); total += v; } });
+      if (soc.services && Array.isArray(soc.services)) soc.services.forEach(function (s) { var v = parseFloat(s.satisfaction); if (!isNaN(v)) { scores.push(v); total += v; } });
 
       if (scores.length === 0) {
         soc._score = { avg: 0, grade: 'N/A', label: '数据不足', count: 0 };
