@@ -1617,19 +1617,8 @@
       var text = buildStartupText();
       if (!text) { alert('请至少填写领导人姓名或国名，或粘贴开局内容'); return; }
 
-      // 保存当前API配置（resetAllGameData会清掉）
-      var savedApiSettings = Object.assign({}, apiSettings);
-
-      // 先清除所有旧数据，再重新生成
+      // 先清除所有旧数据，再重新生成（API配置由独立storage保留）
       resetAllGameData();
-
-      // 恢复API配置
-      apiSettings = savedApiSettings;
-      document.getElementById('apiEndpoint').value = apiSettings.endpoint;
-      document.getElementById('apiKey').value = apiSettings.key;
-      document.getElementById('apiProModel').value = apiSettings.proModel;
-      document.getElementById('apiFlashModel').value = apiSettings.flashModel;
-      document.getElementById('apiCustomPrompt').value = apiSettings.customPrompt;
 
       // 隐藏开局面板（resetAllGameData 会重新显示，这里再次隐藏）
       var overlay = document.getElementById('startupOverlay');
@@ -3330,6 +3319,7 @@
       var fm = document.getElementById('apiFlashModel'); if (fm) apiSettings.flashModel = fm.value;
       var cp = document.getElementById('apiCustomPrompt'); if (cp) apiSettings.customPrompt = cp.value;
       addTypewriterMessage('🔑 API 配置已保存: Pro=' + apiSettings.model + ' / Flash=' + apiSettings.flashModel + ' @ ' + (apiSettings.endpoint || '(未设端点)') + (apiSettings.customPrompt ? ' + 自定义提示词(' + apiSettings.customPrompt.length + '字)' : ''), 'system');
+      saveApiConfigToStorage();
       saveToStorage();
       closePanel();
     }
@@ -3429,6 +3419,26 @@
 
     // ===== 本地存储持久化 =====
     var STORAGE_KEY = 'coldwar_sim_save';
+    var API_STORAGE_KEY = 'coldwar_api_settings';
+
+    function saveApiConfigToStorage() {
+      try {
+        localStorage.setItem(API_STORAGE_KEY, JSON.stringify(apiSettings));
+      } catch (e) { console.warn('API config save failed:', e.message); }
+    }
+
+    function loadApiConfigFromStorage() {
+      try {
+        var raw = localStorage.getItem(API_STORAGE_KEY);
+        if (!raw) return false;
+        var data = JSON.parse(raw);
+        if (data && data.endpoint !== undefined) {
+          apiSettings = data;
+          return true;
+        }
+        return false;
+      } catch (e) { console.warn('API config load failed:', e.message); return false; }
+    }
 
     function saveToStorage() {
       try {
@@ -3502,6 +3512,8 @@
 
     // 页面加载时恢复存档（必须在 countryMapData 定义之后）
     var hasSavedData = loadFromStorage();
+    // 始终从独立存储加载API配置（优先级高于游戏存档中的API配置）
+    loadApiConfigFromStorage();
     if (hasSavedData) {
       updateTimeDisplay();
       var nationEl = document.getElementById('nationName');
@@ -4530,8 +4542,8 @@
       countryMapData.cities = [];
       countryMapData.facilities = [];
       countryMapData.neighbors = [];
-      // 重置API配置
-      apiSettings = { endpoint: 'https://api.openai.com/v1/chat/completions', key: '', proModel: 'gpt-4', flashModel: 'gpt-4-flash', customPrompt: '' };
+      // 从独立存储恢复API配置（不清除用户设置的API密钥等）
+      loadApiConfigFromStorage();
       // 更新UI
       updateTimeDisplay();
       updateStatusBar();
@@ -4544,11 +4556,6 @@
       // 重置国家名
       var nationEl = document.getElementById('nationName');
       if (nationEl) nationEl.textContent = '等待生成';
-      document.getElementById('apiEndpoint').value = apiSettings.endpoint;
-      document.getElementById('apiKey').value = apiSettings.key;
-      document.getElementById('apiProModel').value = apiSettings.proModel;
-      document.getElementById('apiFlashModel').value = apiSettings.flashModel;
-      document.getElementById('apiCustomPrompt').value = apiSettings.customPrompt;
       saveToStorage();
     }
 
@@ -4639,7 +4646,7 @@
           chatHistory = data.chatHistory || [];
           summaries = data.summaries || [];
           // 恢复API设置
-          if (data.apiSettings) { apiSettings = data.apiSettings; }
+          if (data.apiSettings) { apiSettings = data.apiSettings; saveApiConfigToStorage(); }
           updateStatusBar();
           typewriterOutput.innerHTML = '<div class="typewriter-msg system">存档已恢复。游戏时间：<b>' + gameTime.date + ' ' + gameTime.time + '</b>。共 ' + updateLog.length + ' 条变更，' + chatHistory.length + ' 条聊天记录。</div>';
           addTypewriterMessage('📂 存档导入成功。所有面板数据及聊天记忆已恢复。', 'system');
