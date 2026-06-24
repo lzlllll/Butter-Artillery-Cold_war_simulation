@@ -1572,7 +1572,7 @@
       lines.push('输出包含两个部分：');
       lines.push('1. 叙事正文：以小说体描写开局场景，包含NPC亮相和内阁会议');
       lines.push('2. ===UPDATE=== 数据块：完整初始化所有gameState和countryMapData字段');
-
+      lines.push('游戏时间初始值：1965年1月1日 08:00');
       lines.push('阵营：根据背景信息自动判断（华约/西方/不结盟）');
       return lines.join('\n');
     }
@@ -1617,7 +1617,21 @@
       var text = buildStartupText();
       if (!text) { alert('请至少填写领导人姓名或国名，或粘贴开局内容'); return; }
 
-      // 隐藏开局面板
+      // 保存当前API配置（resetAllGameData会清掉）
+      var savedApiSettings = Object.assign({}, apiSettings);
+
+      // 先清除所有旧数据，再重新生成
+      resetAllGameData();
+
+      // 恢复API配置
+      apiSettings = savedApiSettings;
+      document.getElementById('apiEndpoint').value = apiSettings.endpoint;
+      document.getElementById('apiKey').value = apiSettings.key;
+      document.getElementById('apiProModel').value = apiSettings.proModel;
+      document.getElementById('apiFlashModel').value = apiSettings.flashModel;
+      document.getElementById('apiCustomPrompt').value = apiSettings.customPrompt;
+
+      // 隐藏开局面板（resetAllGameData 会重新显示，这里再次隐藏）
       var overlay = document.getElementById('startupOverlay');
       overlay.classList.add('hidden');
 
@@ -4480,9 +4494,8 @@
       sendTypewriterMessage();
     });
 
-    // 开启新游戏
-    document.getElementById('newGameBtn').addEventListener('click', function () {
-      if (!confirm('确定要开启新游戏吗？当前所有进度和数据将被清除。')) return;
+    // 重置所有游戏数据（公共函数，新游戏和开局确认时都会调用）
+    function resetAllGameData() {
       // 清除 localStorage
       localStorage.removeItem(STORAGE_KEY);
       // 重置所有状态
@@ -4537,6 +4550,12 @@
       document.getElementById('apiFlashModel').value = apiSettings.flashModel;
       document.getElementById('apiCustomPrompt').value = apiSettings.customPrompt;
       saveToStorage();
+    }
+
+    // 开启新游戏
+    document.getElementById('newGameBtn').addEventListener('click', function () {
+      if (!confirm('确定要开启新游戏吗？当前所有进度和数据将被清除。')) return;
+      resetAllGameData();
     });
 
     document.getElementById('aiSettingsBtn').addEventListener('click', function () {
