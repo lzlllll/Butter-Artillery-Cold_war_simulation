@@ -2702,6 +2702,13 @@
         h += '<div class="panel-card"><div class="card-title">📈 贸易伙伴占比</div>';
         h += '<div class="chart-container"><canvas id="tradePieChart" style="max-height:200px"></canvas></div>';
         h += '</div>';
+        // 饼图：进出口货物类型
+        h += '<div class="panel-card"><div class="card-title">📦 出口货物类型</div>';
+        h += '<div class="chart-container"><canvas id="exportGoodsChart" style="max-height:180px"></canvas></div>';
+        h += '</div>';
+        h += '<div class="panel-card"><div class="card-title">📥 进口货物类型</div>';
+        h += '<div class="chart-container"><canvas id="importGoodsChart" style="max-height:180px"></canvas></div>';
+        h += '</div>';
         // 折线图：进出口趋势
         h += '<div class="panel-card full-width"><div class="card-title">📉 进出口趋势（近10月模拟）</div>';
         h += '<div class="chart-container"><canvas id="tradeLineChart" style="max-height:180px"></canvas></div>';
@@ -2774,6 +2781,58 @@
             },
             options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: false, ticks: { color: '#B0B0B0' }, grid: { color: 'rgba(255,255,255,0.05)' } }, x: { ticks: { color: '#B0B0B0' }, grid: { display: false } } }, plugins: { legend: { labels: { color: '#F5F5DC', font: { size: 11 } } } } }
           });
+        }
+        // 进出口货物类型饼图
+        var goodsColors = ['#C9A227', '#E53935', '#3498DB', '#2ECC71', '#F39C12', '#9B59B6', '#1ABC9C', '#E67E22', '#2980B9', '#27AE60', '#E91E63', '#00BCD4'];
+        function buildGoodsAggregate(getAmount) {
+          var map = {};
+          trade.forEach(function (t) {
+            var amount = parseAmount(getAmount(t));
+            if (!amount || amount <= 0) return;
+            var goods = (t.goods || '').split('/');
+            goods.forEach(function (g) {
+              g = g.trim();
+              if (!g) return;
+              map[g] = (map[g] || 0) + amount;
+            });
+          });
+          var labels = Object.keys(map);
+          var data = labels.map(function (k) { return map[k]; });
+          return { labels: labels, data: data };
+        }
+        // 出口货物饼图
+        var expCanvas = document.getElementById('exportGoodsChart');
+        if (expCanvas) {
+          var expCtx = expCanvas.getContext('2d');
+          if (window._exportGoods) window._exportGoods.destroy();
+          var expAgg = buildGoodsAggregate(function (t) { return t.exports; });
+          if (expAgg.labels.length > 0) {
+            window._exportGoods = new Chart(expCtx, {
+              type: 'pie',
+              data: {
+                labels: expAgg.labels,
+                datasets: [{ data: expAgg.data, backgroundColor: goodsColors.slice(0, expAgg.labels.length), borderColor: 'rgba(15,25,55,1)', borderWidth: 1 }]
+              },
+              options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: '#F5F5DC', font: { size: 9 }, padding: 6 } }, tooltip: { callbacks: { label: function (ctx) { return ctx.label + ': ' + ctx.raw + '亿'; } } } } }
+            });
+          }
+        }
+        // 进口货物饼图
+        var impCanvas = document.getElementById('importGoodsChart');
+        if (impCanvas) {
+          var impCtx = impCanvas.getContext('2d');
+          if (window._importGoods) window._importGoods.destroy();
+          var impAgg = buildGoodsAggregate(function (t) { return t.imports; });
+          if (impAgg.labels.length > 0) {
+            window._importGoods = new Chart(impCtx, {
+              type: 'pie',
+              data: {
+                labels: impAgg.labels,
+                datasets: [{ data: impAgg.data, backgroundColor: goodsColors.slice(0, impAgg.labels.length), borderColor: 'rgba(15,25,55,1)', borderWidth: 1 }]
+              },
+              options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: '#F5F5DC', font: { size: 9 }, padding: 6 } }, tooltip: { callbacks: { label: function (ctx) { return ctx.label + ': ' + ctx.raw + '亿'; } } } } }
+            });
+          }
         }
       }, 200);
       return h;
@@ -3943,6 +4002,66 @@
     }
 
     // 构建游戏状态摘要供AI参考
+    function detectMissingData() {
+      var gs = gameState, cm = countryMapData, missing = [];
+      function isEmpty(val) { return val === '等待生成' || val === undefined || val === null || val === ''; }
+      function isEmptyArr(arr) { return !Array.isArray(arr) || arr.length === 0; }
+
+      // 宏观
+      if (isEmpty(gs.macro.gdp)) missing.push('macro[gdp]');
+      if (isEmpty(gs.macro.political_stability)) missing.push('macro[political_stability]');
+      if (isEmpty(gs.macro.unemployment)) missing.push('macro[unemployment]');
+      if (isEmpty(gs.macro.growth_rate)) missing.push('macro[growth_rate]');
+
+      // 财政
+      if (isEmpty(gs.fiscal.total_income) && isEmptyArr(gs.fiscal.income_items)) missing.push('fiscal[income]');
+      if (isEmptyArr(gs.fiscal.expense_items) && isEmpty(gs.fiscal.total_expense)) missing.push('fiscal[expense]');
+      if (isEmptyArr(gs.fiscal.state_economy.enterprises) && isEmptyArr(gs.fiscal.state_economy.resources)) missing.push('fiscal[state_economy]');
+      if (isEmptyArr(gs.fiscal.debt.payments)) missing.push('fiscal[debt_payments]');
+      if (isEmptyArr(gs.fiscal.currency.reserve_items)) missing.push('fiscal[reserve_items]');
+
+      // 政治
+      if (isEmptyArr(gs.council.groups) && isEmptyArr(gs.council.factions)) missing.push('council');
+      if (isEmptyArr(gs.admin.departments) && isEmptyArr(gs.admin.projects)) missing.push('admin');
+      if (isEmptyArr(gs.legal.constitution) && isEmptyArr(gs.legal.amendments)) missing.push('legal');
+
+      // 经济
+      if (isEmptyArr(gs.econ.trade)) missing.push('econ[trade]');
+      if (isEmptyArr(gs.econ.domestic_industries)) missing.push('econ[industry]');
+      if (isEmptyArr(gs.econ.infrastructure)) missing.push('econ[infra]');
+      if (isEmptyArr(gs.econ.facilities)) missing.push('econ[facilities]');
+      if (isEmptyArr(gs.econ.exports) && isEmptyArr(gs.econ.imports)) missing.push('econ[出口/进口]');
+
+      // 军事
+      if (isEmpty(gs.military.strength) && isEmptyArr(gs.military.units)) missing.push('military');
+      if (isEmptyArr(gs.military.equipment_items)) missing.push('military[equipment]');
+      if (isEmptyArr(gs.military.ideology.programs)) missing.push('military[ideology]');
+
+      // 外交
+      if (isEmptyArr(gs.diplomacy.relations)) missing.push('diplomacy[relations]');
+      if (isEmptyArr(gs.diplomacy.treaties)) missing.push('diplomacy[treaties]');
+      if (isEmptyArr(gs.diplomacy.un.resolutions) && isEmptyArr(gs.diplomacy.un.sanctions)) missing.push('diplomacy[un]');
+
+      // 社会
+      if (isEmptyArr(gs.society.supply) && isEmptyArr(gs.society.classes) && isEmptyArr(gs.society.services)) missing.push('society');
+
+      // 其他
+      if (isEmptyArr(gs.policies)) missing.push('policies');
+      if (isEmptyArr(gs.local_gov)) missing.push('local_gov');
+      if (isEmptyArr(gs.npcs)) missing.push('npcs');
+      if (isEmptyArr(gs.news.items)) missing.push('news');
+      if (isEmptyArr(gs.notes) || (gs.notes.length === 1 && gs.notes[0] === '等待生成')) missing.push('notes');
+
+      // 地图
+      if (isEmptyArr(cm.regions)) missing.push('map[regions]');
+      if (isEmptyArr(cm.provinces)) missing.push('map[provinces]');
+      if (isEmptyArr(cm.cities)) missing.push('map[cities]');
+      if (isEmptyArr(cm.facilities)) missing.push('map[facilities]');
+      if (isEmptyArr(cm.neighbors)) missing.push('map[neighbors]');
+
+      return missing.length > 0 ? missing : null;
+    }
+
     function buildGameStateSummary() {
       var gs = gameState, cm = countryMapData;
       var parts = [];
@@ -4490,7 +4609,10 @@
       }
 
       // 阶段1: 调用 Flash 模型决定需要哪些数据分区
-      var flashCtx = RELEVANCE_CHECK_PROMPT + '\n\n游戏时间: ' + gameTime.date + ' ' + gameTime.time + '\n用户消息: ' + text + '\n已有数据模块: ' + buildGameStateSummary() + '\n\n请输出相关分区JSON数组:';
+      // 检测缺失数据，强制 Flash 关注这些分区
+      var missingData = detectMissingData();
+      var missingHint = missingData ? '\n⚠️ 以下分区数据缺失或为空，无论用户消息是否相关，都必须包含在结果中: ' + JSON.stringify(missingData) : '';
+      var flashCtx = RELEVANCE_CHECK_PROMPT + '\n\n游戏时间: ' + gameTime.date + ' ' + gameTime.time + '\n用户消息: ' + text + '\n已有数据模块: ' + buildGameStateSummary() + missingHint + '\n\n请输出相关分区JSON数组:';
       var flashBody = JSON.stringify({
         model: apiSettings.flashModel || 'gpt-4-flash',
         messages: [
@@ -4516,6 +4638,15 @@
 
           // 阶段2: 用裁剪后的上下文调用 Pro 模型
           var filteredCtx = buildFilteredContext(sections, text);
+
+          // 如果检测到缺失数据，注入强制更新指令
+          if (missingData) {
+            filteredCtx = '=== ⚠️ 强制补全指令 ===\n' +
+              '检测到以下数据分区缺失或为空（上轮未能生成）：' + JSON.stringify(missingData) + '\n' +
+              '无论用户消息内容如何，你都必须在此次回复的 ===UPDATE=== 块中使用 add/modify 操作填充这些缺失数据。\n' +
+              '缺失分区列表已由系统自动加入上下文，请逐一生成合理值。\n' +
+              '=== 指令结束 ===\n\n' + filteredCtx;
+          }
 
           // 检测是否为第一轮（全部数据为"等待生成"→要求完整输出）
           var isInitRound = gameState.macro.gdp === '等待生成';
