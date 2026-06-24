@@ -1773,7 +1773,7 @@
       '===UPDATE==={' + '\n' +
       '  "time": {"date":"1965年1月3日","time":"14:30"},' + '\n' +
       '  "modify": {"macro.gdp": "5300亿", "macro.growth_rate": "6.2", "macro.unemployment": "4.5"},' + '\n' +
-      '  "add": {"econ.trade": [{"partner":"苏联","exports":"120亿","imports":"95亿","goods":"机械/石油","barterPct":"30","dependency":"中"}], "fiscal.income_items": [{"name":"税收","category":"tax","amount":"3000亿","ratio":"58"}]},' + '\n' +
+      '  "add": {"econ.trade": [{"partner":"苏联","exports":"120亿","imports":"95亿","exportGoods":"机械/军火","importGoods":"石油/天然气/木材","barterPct":"30","dependency":"中"}], "fiscal.income_items": [{"name":"税收","category":"tax","amount":"3000亿","ratio":"58"}]},' + '\n' +
       '  "delete": {"diplomacy.relations[2]": true}' + '\n' +
       '}===end===' + '\n' +
       'add=向数组追加（第一轮全量输出时也用add）| modify=修改标量值（第一轮首次写入也用modify）| delete=删除字段/数组元素 | time=推进钟表（每轮必须推进）' + '\n' +
@@ -1790,7 +1790,8 @@
       'council: {groups:[{name,seats,ideology,leader,support}], factions:[{name,leader,demand,base,influence,loyalty}]}' + '\n' +
       'admin: {departments:[{name,head,function}], projects:[{name,stage,progress}], civil_servants, corruption, institutions:[{emoji,name,level,function,parent,head,headTitle,subs}]}' + '\n' +
       'legal: {judicial_independence, constitution:[{article,content,nature}], amendments:[{name,year,summary,status}], laws:[{name,category,year,enforcement}]}' + '\n' +
-      'econ: {trade:[{partner,exports,imports,goods,barterPct,dependency}], domestic_industries:[{name,category,output,annualOutput,resourceCost,capitalCost,employees,profitability,status,trend,trendDesc}], infrastructure:[{category,name,coverage,capacity,status,investment,maintenance,notes}], facilities, exports, imports}' + '\n' +
+      'econ: {trade:[{partner,exports,imports,exportGoods,importGoods,barterPct,dependency}...], domestic_industries:[{name,category,output,annualOutput,resourceCost,capitalCost,employees,profitability,status,trend,trendDesc}], infrastructure:[{category,name,coverage,capacity,status,investment,maintenance,notes}], facilities, exports, imports}' + '\n' +
+      '重要：exportGoods为本国出口给该伙伴的商品（斜杠分隔），importGoods为本国从该伙伴进口的商品（斜杠分隔）。两者必须不同，反映该国该伙伴的真实比较优势。例如对苏联出口机械/军火，进口石油/天然气。对发展中国家出口工业品，进口原材料。' + '\n' +
       'military: {strength,troops,equipment,morale,budget,navy,airforce,army,reserves, units:[{name,nature,personnel,equipment,supply,loyalty,morale,elite}], equipment_items:[{name,category,quantity,capacity,procurement,selfRate,rdProject,techDirection}], ideology:{education,loyalty,programs:[{name,coverage,frequency,effect,status}]}}' + '\n' +
       'diplomacy: {relations:[], multilateral:[{name,type,nature,benefits,rules,members}], treaties:[{name,validity,content,parties,penalty}], intl_orgs:[{name,type,role,status,membership}], un:{security_council:[{flag,name,type,veto,stance}], resolutions:[{id,topic,sponsor,expectedVote,ourStance,status}], sanctions:[{name,target,content,participants,impact,status}]}}' + '\n' +
       'society: {supply:[{category,name,annualSupply,perCapita,rationMethod,satisfaction,blackMarket,notes}], classes:[{name,population,demands,ideology,satisfaction,livingStandard,leaning}], services:[{category,indicator,level,coverage,perCapita,spending,satisfaction,notes}], culture:[{field,name,scale,participation,funding,activity,notes}]}' + '\n' +
@@ -2720,7 +2721,7 @@
         h += '</div>';
         // 贸易伙伴详情表
         h += '<div class="panel-card full-width"><div class="card-title">贸易伙伴详情</div>';
-        h += '<div class="table-container"><table class="data-table"><thead><tr><th>伙伴</th><th>出口额</th><th>进口额</th><th>顺逆差</th><th>主要贸易品</th><th>易货占比</th><th>依赖度</th></tr></thead><tbody>';
+        h += '<div class="table-container"><table class="data-table"><thead><tr><th>伙伴</th><th>出口额</th><th>进口额</th><th>顺逆差</th><th style="color:#2ECC71">出口商品</th><th style="color:#E53935">进口商品</th><th>易货占比</th><th>依赖度</th></tr></thead><tbody>';
         var totalExp = 0, totalImp = 0;
         trade.forEach(function (t) {
           var exp = parseAmount(t.exports);
@@ -2736,7 +2737,10 @@
           h += '<tr><td><b>' + t.partner + '</b></td>';
           h += '<td>' + t.exports + '</td><td>' + t.imports + '</td>';
           h += '<td style="color:' + balColor + ';font-weight:600">' + balStr + '</td>';
-          h += '<td>' + (t.goods || '--') + '</td>';
+          var expGoods = t.exportGoods || t.goods || '--';
+          var impGoods = t.importGoods || t.goods || '--';
+          h += '<td style="color:#2ECC71">' + expGoods + '</td>';
+          h += '<td style="color:#E53935">' + impGoods + '</td>';
           h += '<td>' + (t.barterPct || '0%') + '</td>';
           h += '<td>' + (t.dependency || '--') + '</td></tr>';
         });
@@ -2744,7 +2748,7 @@
         var totalColor = totalBal >= 0 ? 'var(--success-green)' : 'var(--crisis-red)';
         var totalStr = (totalBal >= 0 ? '+' : '') + totalBal + '亿';
         h += '<tr style="font-weight:700;border-top:2px solid var(--royal-gold)"><td>总计</td><td>' + totalExp + '亿</td><td>' + totalImp + '亿</td>';
-        h += '<td style="color:' + totalColor + '">' + totalStr + '（' + (totalBal >= 0 ? '顺差' : '逆差') + '）</td><td></td><td></td><td></td></tr>';
+        h += '<td style="color:' + totalColor + '">' + totalStr + '（' + (totalBal >= 0 ? '顺差' : '逆差') + '）</td><td></td><td></td><td></td><td></td></tr>';
         h += '</tbody></table></div></div>';
       }
       h += '</div>';
@@ -2789,12 +2793,14 @@
         }
         // 进出口货物类型饼图
         var goodsColors = ['#C9A227', '#E53935', '#3498DB', '#2ECC71', '#F39C12', '#9B59B6', '#1ABC9C', '#E67E22', '#2980B9', '#27AE60', '#E91E63', '#00BCD4'];
-        function buildGoodsAggregate(getAmount) {
+        function buildGoodsAggregate(getAmount, getGoodsField) {
           var map = {};
           trade.forEach(function (t) {
             var amount = parseAmount(getAmount(t));
             if (!amount || amount <= 0) return;
-            var goods = (t.goods || '').split('/');
+            var goodsField = getGoodsField(t);
+            if (!goodsField) return;
+            var goods = goodsField.split('/');
             goods.forEach(function (g) {
               g = g.trim();
               if (!g) return;
@@ -2810,7 +2816,10 @@
         if (expCanvas) {
           var expCtx = expCanvas.getContext('2d');
           if (window._exportGoods) window._exportGoods.destroy();
-          var expAgg = buildGoodsAggregate(function (t) { return t.exports; });
+          var expAgg = buildGoodsAggregate(
+            function (t) { return t.exports; },
+            function (t) { return t.exportGoods || t.goods || ''; }
+          );
           if (expAgg.labels.length > 0) {
             window._exportGoods = new Chart(expCtx, {
               type: 'pie',
@@ -2827,7 +2836,10 @@
         if (impCanvas) {
           var impCtx = impCanvas.getContext('2d');
           if (window._importGoods) window._importGoods.destroy();
-          var impAgg = buildGoodsAggregate(function (t) { return t.imports; });
+          var impAgg = buildGoodsAggregate(
+            function (t) { return t.imports; },
+            function (t) { return t.importGoods || t.goods || ''; }
+          );
           if (impAgg.labels.length > 0) {
             window._importGoods = new Chart(impCtx, {
               type: 'pie',
