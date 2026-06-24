@@ -1183,6 +1183,44 @@
       }
     }
 
+    .suggestions-bar {
+      padding: 10px 20px;
+      border-top: 1px solid rgba(201, 162, 39, 0.15);
+      background: rgba(0, 0, 0, 0.08);
+    }
+
+    .suggestions-label {
+      font-size: 11px;
+      color: var(--smoke);
+      margin-bottom: 8px;
+      letter-spacing: 1px;
+    }
+
+    .suggestions-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .suggestion-btn {
+      padding: 6px 14px;
+      background: rgba(201, 162, 39, 0.1);
+      border: 1px solid rgba(201, 162, 39, 0.3);
+      border-radius: 4px;
+      color: var(--royal-gold);
+      font-family: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .suggestion-btn:hover {
+      background: rgba(201, 162, 39, 0.2);
+      border-color: var(--royal-gold);
+      box-shadow: 0 0 8px rgba(201, 162, 39, 0.2);
+    }
+
     .typewriter-input-row {
       display: flex;
       gap: 10px;
@@ -1496,6 +1534,10 @@
             </span>
           </div>
         </div>
+        <div class="suggestions-bar" id="suggestionsBar" style="display:none">
+          <div class="suggestions-label">📌 建议行动</div>
+          <div class="suggestions-list" id="suggestionsList"></div>
+        </div>
         <div class="typewriter-input-row">
           <textarea class="typewriter-input" id="typewriterInput" rows="2"
             placeholder="在此输入命令或咨询...按 Enter 发送"></textarea>
@@ -1669,6 +1711,7 @@
             if (summary) aiMsg += '<br><span class="data-log-ref" onclick="openPanel(\'datalog\')">📋 ' + summary + ' — 点击查看详细日志</span>';
           }
           addTypewriterMessage(aiMsg, 'ai');
+          renderSuggestions(response.options || null);
           renderNewsSidebar();
           drawCountryMap();
           updateTimeDisplay();
@@ -1684,7 +1727,7 @@
       '你是"冷战模拟器"本身。呈现世界状态、推进时间、生成事件、计算决策后果，扮演所有NPC。' + '\n' +
       '你**不是**AI助手，你就是这个游戏世界。严禁说"作为AI""根据设定""请注意"等元叙述语言。始终处于角色之中。' + '\n' +
       '玩家角色：冷战时期的国家领导人。' + '\n' +
-      '时代：冷战高峰，核阴影笼罩全球，军备竞赛/太空竞赛/代理人战争/间谍战全面展开。柏林墙已建成。' + '\n' +
+      '时代：冷战高峰，核阴影笼罩全球，军备竞赛/太空竞赛/代理人战争/间谍战全面展开。柏林墙已建成。具体年代和时间点由用户决定' + '\n' +
       '' + '\n' +
       '## 二、阵营体系' + '\n' +
       '西方阵营：美国/北约，资本主义市场经济+自由民主' + '\n' +
@@ -1709,10 +1752,13 @@
       '## 五、输出格式（强制规则，违反将导致数据丢失）' + '\n' +
       '每次回复必须严格按以下结构输出，不得增删任何组成部分，不得自定义格式：' + '\n' +
       '---' + '\n' +
-      '【叙事正文】以首席顾问/NPC口吻汇报，描述场景/决策结果/事件/提出2-4个政策选项' + '\n' +
+      '【叙事正文】以首席顾问/NPC口吻汇报，描述场景/决策结果/事件' + '\n' +
       '【数据更新块】用 ===UPDATE=== 和 ===end=== 包裹的JSON。此块必须存在，即使无变更也要发送空JSON。' + '\n' +
       '格式固定为: ===UPDATE===\n{...JSON...}\n===end===' + '\n' +
-      '禁止事项：禁止省略===UPDATE===块。禁止将JSON放在代码块中。禁止使用Markdown代码块包裹。禁止添加额外注释。禁止修改分隔符。禁止将数据混入叙事正文。' + '\n' +
+      '【行动建议块】用 ===OPTIONS=== 和 ===end=== 包裹的JSON数组。此块必须存在。' + '\n' +
+      '格式固定为: ===OPTIONS===\n[{"label":"简短按钮文字","text":"完整输入命令"},...]\n===end===' + '\n' +
+      'label为按钮上显示的简短文字(6字以内)，text为点击后填入输入框的完整命令文本。提供3-5个基于当前局势的下回合行动建议。角色扮演口吻，如"召见苏联大使"、"增加军费开支"、"签署贸易协定"。' + '\n' +
+      '禁止事项：禁止省略===UPDATE===块和===OPTIONS===块。禁止将JSON放在代码块中。禁止使用Markdown代码块包裹。禁止添加额外注释。禁止修改分隔符。禁止将数据混入叙事正文。' + '\n' +
       '' + '\n' +
       '## 六、数据协议' + '\n' +
       '⚠️ 强制数字规则：所有含数值的数据字段必须输出纯数字，不得混合中文。' + '\n' +
@@ -4239,7 +4285,8 @@
             '3. AI返回的 <code>===UPDATE===</code> 块由 <code>parseUpdateBlock()</code> 自动解析<br>' +
             '4. 数据增量写入 gameState，面板自动刷新<br><br>' +
             '输入"帮助"查看数据模型，或输入具体关键词获取模块说明。',
-          updates: null
+          updates: null,
+          options: null
         };
       }
 
@@ -4256,46 +4303,75 @@
             '• <b>地图</b> — 国家地理数据<br>' +
             '• <b>全部/初始化</b> — 触发第一轮完整输出<br><br>' +
             '系统提示词(' + SYSTEM_PROMPT.length + '字符)已通过 <code>buildAIContext()</code> 送往AI上下文。',
-          updates: null
+          updates: null,
+          options: null
         };
       }
       if (lower.indexOf('财政') !== -1 || lower.indexOf('预算') !== -1 || lower.indexOf('收支') !== -1) {
-        return { text: '财政数据尚待生成。请输入具体需求以触发数据录入。', updates: null };
+        return { text: '财政数据尚待生成。请输入具体需求以触发数据录入。', updates: null, options: null };
       }
 
       // 政治
       if (lower.indexOf('政治') !== -1 || lower.indexOf('议会') !== -1 || lower.indexOf('选举') !== -1) {
-        return { text: '政治与议会数据尚待生成。请输入具体需求以触发数据录入。', updates: null };
+        return { text: '政治与议会数据尚待生成。请输入具体需求以触发数据录入。', updates: null, options: null };
       }
 
       // 经济
       if (lower.indexOf('经济') !== -1 || lower.indexOf('gdp') !== -1 || lower.indexOf('产业') !== -1) {
-        return { text: '经济数据尚待生成。请输入具体需求以触发数据录入。', updates: null };
+        return { text: '经济数据尚待生成。请输入具体需求以触发数据录入。', updates: null, options: null };
       }
 
       // 外交
       if (lower.indexOf('外交') !== -1 || lower.indexOf('条约') !== -1 || lower.indexOf('联合国') !== -1 || lower.indexOf('大使') !== -1) {
-        return { text: '外交关系数据尚待生成。请输入具体需求以触发数据录入。', updates: null };
+        return { text: '外交关系数据尚待生成。请输入具体需求以触发数据录入。', updates: null, options: null };
       }
 
       // 军事
       if (lower.indexOf('军事') !== -1 || lower.indexOf('军队') !== -1 || lower.indexOf('国防') !== -1 || lower.indexOf('战力') !== -1) {
-        return { text: '军事力量数据尚待生成。请输入具体需求以触发数据录入。', updates: null };
+        return { text: '军事力量数据尚待生成。请输入具体需求以触发数据录入。', updates: null, options: null };
       }
 
       // 地图
       if (lower.indexOf('地图') !== -1 || lower.indexOf('地理') !== -1) {
-        return { text: '国家地理数据尚待生成。请输入具体需求以触发数据录入。', updates: null };
+        return { text: '国家地理数据尚待生成。请输入具体需求以触发数据录入。', updates: null, options: null };
       }
 
       // 综合/默认
       return {
         text: '系统已收到查询。回复中可包含 <code>===UPDATE===</code> 块推送数据，含 <code>time: { date: "1965年1月2日", time: "14:30" }</code> 推进游戏时钟。当前时间：' + gameTime.date + ' ' + gameTime.time + '。<br><span style="color:var(--smoke);font-size:11px">完整系统提示词(' + SYSTEM_PROMPT.length + '字符)已随 <code>buildAIContext()</code> 发送。</span>',
-        updates: null
+        updates: null,
+        options: [
+          { label: '查看财政', text: '查看我国财政状况' },
+          { label: '召开内阁会议', text: '召开内阁会议，讨论当前局势' },
+          { label: '检阅军队', text: '检阅军队，了解国防力量' }
+        ]
       };
     }
 
     function randPick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+    function renderSuggestions(options) {
+      var bar = document.getElementById('suggestionsBar');
+      var list = document.getElementById('suggestionsList');
+      if (!bar || !list) return;
+      if (!options || !Array.isArray(options) || options.length === 0) {
+        bar.style.display = 'none';
+        return;
+      }
+      list.innerHTML = '';
+      options.forEach(function (opt) {
+        var btn = document.createElement('button');
+        btn.className = 'suggestion-btn';
+        btn.textContent = opt.label || opt.text || '';
+        btn.title = opt.text || '';
+        btn.addEventListener('click', function () {
+          typewriterInput.value = opt.text || '';
+          typewriterInput.focus();
+        });
+        list.appendChild(btn);
+      });
+      bar.style.display = 'block';
+    }
 
     var lastUserText = ''; // 保存上一条用户输入，供重新生成使用
 
@@ -4327,6 +4403,7 @@
             aiMsg += '<br><div style="margin-top:8px;padding:8px;background:rgba(0,0,0,0.3);border-radius:4px;font-size:11px;color:var(--smoke);font-family:monospace">===UPDATE===<br>' + JSON.stringify(response.updates, null, 2).replace(/</g, '&lt;').split('\n').join('<br>') + '<br>===end===</div>';
           }
           addTypewriterMessage(aiMsg, 'ai');
+          renderSuggestions(response.options || null);
           typewriterSend.disabled = false;
         }, 600 + Math.random() * 800);
         return;
@@ -4339,8 +4416,17 @@
       function handleProResponse(proResult) {
         loadingMsg.remove();
         var proContent = proResult.choices && proResult.choices[0] ? proResult.choices[0].message.content : '';
-        var parts = proContent.split('===UPDATE===');
-        var narrativeText = parts[0] || proContent;
+        // 解析 ===OPTIONS=== 块（在 ===UPDATE=== 之前解析，避免被UPDATE的分割干扰）
+        var optionsParts = proContent.split('===OPTIONS===');
+        var cleanContent = optionsParts[0];
+        var options = null;
+        if (optionsParts.length > 1) {
+          var optionsBlock = optionsParts[1].split('===end===')[0];
+          try { options = JSON.parse(optionsBlock); } catch (e) { console.log('Options parse error:', e); }
+        }
+        // 解析 ===UPDATE=== 块
+        var parts = cleanContent.split('===UPDATE===');
+        var narrativeText = parts[0] || cleanContent;
         var updates = null;
         if (parts.length > 1) {
           var updateBlock = parts[1].split('===end===')[0];
@@ -4352,6 +4438,8 @@
           if (summary) aiMsg += '<br><span class="data-log-ref" onclick="openPanel(\'datalog\')">📋 ' + summary + ' — 点击查看详细日志</span>';
         }
         addTypewriterMessage(aiMsg, 'ai');
+        // 渲染行动建议
+        renderSuggestions(options);
         typewriterSend.disabled = false;
       }
 
@@ -4550,6 +4638,9 @@
       renderNewsSidebar();
       drawCountryMap();
       typewriterOutput.innerHTML = '<div class="typewriter-msg system">新游戏已开启。回合制时钟：<b>' + gameTime.date + ' ' + gameTime.time + '</b>。<br>请在下方输入指令推进国家模拟。</div>';
+      // 隐藏建议栏
+      var sb = document.getElementById('suggestionsBar');
+      if (sb) sb.style.display = 'none';
       // 显示开局面板
       var overlay = document.getElementById('startupOverlay');
       if (overlay) overlay.classList.remove('hidden');
