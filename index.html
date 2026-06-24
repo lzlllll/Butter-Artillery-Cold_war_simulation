@@ -1860,7 +1860,7 @@
       local_gov: function () { return JSON.stringify(cleanForAI(gameState.local_gov)); },
       npcs: function () { return JSON.stringify(cleanForAI(gameState.npcs)); },
       news: function () { return JSON.stringify(cleanForAI(gameState.news)); },
-      map: function () { return JSON.stringify(cleanForAI({ regions: countryMapData.regions.length, provinces: countryMapData.provinces.length, cities: countryMapData.cities.length, facilities: countryMapData.facilities.length, neighbors: countryMapData.neighbors.length })); }
+      map: function () { return JSON.stringify(cleanForAI({ regionCount: countryMapData.regions.length, provinceCount: countryMapData.provinces.length, cityCount: countryMapData.cities.length, facilityCount: countryMapData.facilities.length, neighborCount: countryMapData.neighbors.length })); }
     };
 
     // 去除本地计算字段和冗余值，仅发送原始AI可修改的数据
@@ -2043,6 +2043,11 @@
     function setCountryMapData(path, value) {
       // path = "regions" / "provinces" / "cities" / "facilities" / "neighbors"
       if (countryMapData.hasOwnProperty(path)) {
+        // 防止AI将数组字段覆盖为非数组值（如数字）
+        if (Array.isArray(countryMapData[path]) && !Array.isArray(value)) {
+          console.warn('[setCountryMapData] 拒绝将数组字段 ' + path + ' 设为非数组值:', value);
+          return;
+        }
         countryMapData[path] = value;
       }
     }
@@ -4304,7 +4309,14 @@
             changes.push('➕ [' + path + ']: ' + JSON.stringify(value).substring(0, 40));
           }
           if (path.indexOf('map.') === 0) {
-            setCountryMapData(path.replace('map.', ''), value);
+            var mapPath = path.replace('map.', '');
+            if (countryMapData.hasOwnProperty(mapPath)) {
+              if (Array.isArray(countryMapData[mapPath]) && Array.isArray(value)) {
+                value.forEach(function (item) { countryMapData[mapPath].push(item); });
+              } else {
+                setCountryMapData(mapPath, value);
+              }
+            }
           }
           hasChanges = true;
         });
