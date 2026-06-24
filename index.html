@@ -1572,7 +1572,7 @@
       lines.push('输出包含两个部分：');
       lines.push('1. 叙事正文：以小说体描写开局场景，包含NPC亮相和内阁会议');
       lines.push('2. ===UPDATE=== 数据块：完整初始化所有gameState和countryMapData字段');
-      lines.push('游戏时间初始值：1965年1月1日 08:00');
+      lines.push('游戏时间初始值：根据玩家设定决定');
       lines.push('阵营：根据背景信息自动判断（华约/西方/不结盟）');
       return lines.join('\n');
     }
@@ -1723,7 +1723,7 @@
       '  - 人数(万): 纯数字如 "63000" (系统自动加"万")。' + '\n' +
       '  - 汇率: 纯数字如 "2.46"。' + '\n' +
       '**第一轮（开局设定）：输出全部字段的完整填充。对每个标量字段使用 modify 置值，对每个数组字段使用 add 一次性追加所有元素。不得留空，不得跳过任何字段。countryMapData 也必须完整填充。**' + '\n' +
-      '**后续回合：增量更新，只发送变化部分。**使用add/modify/delete三种操作。' + '\n' +
+      '**后续回合：增量更新，只发送变化部分。**使用add/modify/delete三种操作。示例如下：' + '\n' +
       '===UPDATE==={' + '\n' +
       '  "time": {"date":"1965年1月3日","time":"14:30"},' + '\n' +
       '  "modify": {"macro.gdp": "5300亿", "macro.growth_rate": "6.2", "macro.unemployment": "4.5"},' + '\n' +
