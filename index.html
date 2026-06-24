@@ -2057,7 +2057,8 @@
       var pst = gameState.macro.political_stability === '等待生成' ? '--' : gameState.macro.political_stability;
       document.getElementById('stabilityMeter').style.width = pst === '--' ? '0%' : gameState.macro.political_stability + '%';
       document.getElementById('stabilityValue').textContent = pst === '--' ? '--' : gameState.macro.political_stability + '%';
-      var sup = gameState.council.groups.length > 0 ? gameState.council.groups[0].support : '等待生成';
+      var cg = gameState.council.groups;
+      var sup = (cg && cg.length > 0) ? cg[0].support : '等待生成';
       var supV = sup === '等待生成' ? '--' : sup;
       document.getElementById('supportMeter').style.width = supV === '--' ? '0%' : sup + '%';
       document.getElementById('supportValue').textContent = supV === '--' ? '--' : sup + '%';
@@ -2513,7 +2514,7 @@
       h += '</div>';
       h += '<div class="panel-card full-width"><div class="card-title">议会派系概览</div>';
       var cg = gameState.council.groups;
-      if (cg.length === 0) h += '<div style="color:var(--smoke);padding:20px;text-align:center">等待生成</div>';
+      if (!cg || cg.length === 0) h += '<div style="color:var(--smoke);padding:20px;text-align:center">等待生成</div>';
       else {
         h += '<div class="table-container"><table class="data-table"><thead><tr><th>派系</th><th>支持率</th><th>席位</th><th>影响力</th></tr></thead><tbody>';
         cg.forEach(function (g) { h += '<tr><td>' + g.name + '</td><td>' + g.support + '%</td><td>' + g.seats + '</td><td>' + g.influence + '</td></tr>'; });
@@ -2522,7 +2523,7 @@
       h += '</div>';
       h += '<div class="panel-card full-width"><div class="card-title">现行政策</div>';
       var cp = gameState.city.policies;
-      if (cp.length === 0) h += '<div style="color:var(--smoke);padding:20px;text-align:center">等待生成</div>';
+      if (!cp || cp.length === 0) h += '<div style="color:var(--smoke);padding:20px;text-align:center">等待生成</div>';
       else { cp.forEach(function (p) { h += '<div class="policy-item"><div class="policy-header"><span class="policy-name">' + p.name + '</span><span class="policy-status">' + p.status + '</span></div><div class="policy-details"><span>阶段: ' + p.stage + '</span><span>支持率: ' + p.opinion + '</span></div></div>'; }); }
       h += '</div></div>';
       return h;
@@ -2625,7 +2626,7 @@
       h += '<div class="panel-grid">';
       // 宪法
       h += '<div class="panel-card full-width"><div class="card-title">📜 宪法重要条款</div>';
-      if (!legal.constitution || legal.constitution.length === 0) h += '<div style="color:var(--smoke);padding:20px;text-align:center">等待生成</div>';
+      if (!legal || !legal.constitution || legal.constitution.length === 0) h += '<div style="color:var(--smoke);padding:20px;text-align:center">等待生成</div>';
       else {
         legal.constitution.forEach(function (c) {
           h += '<div class="legal-item">';
@@ -2681,11 +2682,11 @@
       h += '</div>';
       h += '<div class="panel-card full-width"><div class="card-title">主要产业</div>';
       var ef = gameState.econ.facilities;
-      if (ef.length === 0) h += '<div style="color:var(--smoke);padding:20px;text-align:center">等待生成</div>';
+      if (!ef || ef.length === 0) h += '<div style="color:var(--smoke);padding:20px;text-align:center">等待生成</div>';
       else { ef.forEach(function (f) { h += '<div class="list-item"><div class="list-item-info"><div>' + f.type + '</div><div style="font-size:12px;color:var(--smoke)">' + f.employees + '</div></div><div style="font-family:Roboto Mono">' + f.revenue + '</div></div>'; }); }
       h += '</div>';
       var ni = gameState.news.items;
-      if (ni.length > 0) { h += '<div class="panel-card full-width"><div class="card-title">新闻简报</div>'; ni.forEach(function (n) { h += '<div class="news-item"><div class="news-header"><span class="news-media">' + n.media + '</span></div><div class="news-title">' + n.title + '</div><div class="news-body">' + n.body + '</div></div>'; }); h += '</div>'; }
+      if (ni && ni.length > 0) { h += '<div class="panel-card full-width"><div class="card-title">新闻简报</div>'; ni.forEach(function (n) { h += '<div class="news-item"><div class="news-header"><span class="news-media">' + n.media + '</span></div><div class="news-title">' + n.title + '</div><div class="news-body">' + n.body + '</div></div>'; }); h += '</div>'; }
       h += '</div>';
       return h;
     }
@@ -4600,25 +4601,29 @@
       localStorage.removeItem(STORAGE_KEY);
       // 重置所有状态
       gameTime = { date: '1965年1月1日', time: '08:00' };
-      gameState.macro = { gdp: '等待生成', stability: '等待生成', growth: '等待生成', unemployment: '等待生成', cpi: '等待生成', baseRate: '等待生成' };
+      gameState.macro = { political_stability: '等待生成', execution_efficiency: '等待生成', gdp: '等待生成', growth_rate: '等待生成', unemployment: '等待生成', currency_cpi: '等待生成' };
       gameState.fiscal = {
         income_items: [], expense_items: [], total_income: '等待生成', total_expense: '等待生成',
         state_economy: { enterprises: [], resources: [] },
         debt: { domestic: '等待生成', foreign: '等待生成', interest: '等待生成', restructuring: '等待生成', payments: [] },
         currency: { inflation: '等待生成', exchange_rate: '等待生成', forex_control: '等待生成', reserves: '等待生成', reserve_items: [] }
       };
-      gameState.admin = { departments: [], projects: [] };
-      gameState.military = { personnel: '等待生成', budget: '等待生成', morale: '等待生成', readiness: '等待生成', equipmentMod: '等待生成', conscription: '等待生成', reserves: '等待生成', specialForces: '等待生成', nukes: '等待生成', units: [], equipment_items: [], ideology: { education: '等待生成', loyalty: '等待生成', programs: [] } };
-      gameState.politics = { council: { groups: [], factions: [] }, legal: { constitution: [], amendments: [], laws: [], judicial_independence: '等待生成' } };
-      gameState.diplomacy = { relations: [], facilities: [], multilateral: [], treaties: [], intl_orgs: [], un: { council: [], resolutions: [], sanctions: [] } };
-      gameState.econ = { exports: [], imports: [], trade: [], domestic_industries: [], infrastructure: [] };
-      gameState.society = { supply: [], classes: [], services: [], culture: [], _score: null, _grade: null };
+      gameState.council = { groups: [], factions: [] };
+      gameState.admin = { departments: [], projects: [], civil_servants: '等待生成', corruption: '等待生成', institutions: [] };
+      gameState.city = { policies: [] };
+      gameState.legal = { constitution: [], amendments: [], laws: [], judicial_independence: '等待生成' };
+      gameState.econ = { facilities: [], exports: [], imports: [], trade: [], domestic_industries: [], infrastructure: [] };
+      gameState.military = { strength: '等待生成', troops: '等待生成', equipment: '等待生成', morale: '等待生成', budget: '等待生成', navy: '等待生成', airforce: '等待生成', army: '等待生成', reserves: '等待生成', units: [], equipment_items: [], ideology: { education: '等待生成', loyalty: '等待生成', programs: [] } };
+      gameState.diplomacy = { relations: [], multilateral: [], treaties: [], intl_orgs: [], un: { security_council: [], resolutions: [], sanctions: [] } };
+      gameState.society = { supply: [], classes: [], services: [], culture: [] };
       gameState.policies = [];
       gameState.notes = ['等待生成'];
       gameState.news = { items: [] };
       gameState.local_gov = [];
       gameState.npcs = [];
       gameState.country = '等待生成';
+      // 清除可能残留的旧结构字段
+      delete gameState.politics;
       updateLog = [];
       dataLog = [];
       chatHistory = [];
