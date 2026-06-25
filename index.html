@@ -1768,15 +1768,42 @@
       '  - 百分比(n%): 纯数字如 "85" (系统自动加"%"且按阈值着色)。' + '\n' +
       '  - 人数(万): 纯数字如 "63000" (系统自动加"万")。' + '\n' +
       '  - 汇率: 纯数字如 "2.46"。' + '\n' +
+      '' + '\n' +
+      '🔄 更新优先级规则（强制）：' + '\n' +
+      '**原则：能改不增，能增不删** — 优先修改现有数据，只有在确实需要新条目时才添加。' + '\n' +
+      '' + '\n' +
+      '标量字段(macro.fiscal.military等单值字段)：' + '\n' +
+      '  - 始终使用 modify 操作更新已有值。' + '\n' +
+      '  - 例如 GDP增长：modify {"macro.gdp": "5600", "macro.growth_rate": "5.7"}' + '\n' +
+      '  - 禁止用 add 操作修改标量。' + '\n' +
+      '' + '\n' +
+      '数组字段(trade/domestic_industries/policies/units/npcs等)：' + '\n' +
+      '  - 先检查是否已有可更新的条目，再决定是否添加新条目。' + '\n' +
+      '  - 修改数组中已有条目：使用 modify + 索引路径，如 "econ.trade[0].exports": "130亿"（更新第1个贸易伙伴的出口额）' + '\n' +
+      '  - 添加新条目：只有当确实没有匹配项时才用 add 追加。例如 trade 中没有"日本"这个伙伴，才 add 一个新的。' + '\n' +
+      '  - 删除条目：只有条目确实不再存在时才用 delete，如 "econ.trade[2]": true（删除第3个贸易伙伴）。' + '\n' +
+      '' + '\n' +
+      '常用数组的匹配规则：' + '\n' +
+      '  - trade: 按 partner 字段匹配。更新苏联贸易额 → modify "econ.trade[0].exports"' + '\n' +
+      '  - income_items/expense_items: 按 name+category 匹配。更新税收 → modify "fiscal.income_items[0].amount"' + '\n' +
+      '  - domestic_industries: 按 name+category 匹配。更新钢铁厂产量 → modify "econ.domestic_industries[1].output"' + '\n' +
+      '  - infrastructure: 按 category+name 匹配。推进大坝建设进度 → modify "econ.infrastructure[0].investment"' + '\n' +
+      '  - policies: 按 name 匹配。更新政策支持率 → modify "policies[0].support"' + '\n' +
+      '  - units/equipment_items: 按 name 匹配。更新部队装备 → modify "military.units[0].equipment"' + '\n' +
+      '  - council.groups/factions: 按 name 匹配。更新派系影响力 → modify "council.factions[0].influence"' + '\n' +
+      '  - npcs: 按 name+role 匹配。更新NPC忠诚度 → modify "npcs[0].loyalty"' + '\n' +
+      '  - news.items: 每次添加新新闻，不修改旧新闻（新闻是历史记录）。' + '\n' +
+      '' + '\n' +
       '**第一轮（开局设定）：输出全部字段的完整填充。对每个标量字段使用 modify 置值，对每个数组字段使用 add 一次性追加所有元素。不得留空，不得跳过任何字段。countryMapData 也必须完整填充。**' + '\n' +
-      '**后续回合：增量更新，只发送变化部分。**使用add/modify/delete三种操作。示例如下：' + '\n' +
+      '**后续回合：增量更新，只发送变化部分。**优先使用 modify 更新已有值，仅在确实需要新增条目时才使用 add。示例如下：' + '\n' +
       '===UPDATE==={' + '\n' +
       '  "time": {"date":"1965年1月3日","time":"14:30"},' + '\n' +
-      '  "modify": {"macro.gdp": "5300亿", "macro.growth_rate": "6.2", "macro.unemployment": "4.5"},' + '\n' +
-      '  "add": {"econ.trade": [{"partner":"苏联","exports":"120亿","imports":"95亿","exportGoods":"机械/军火","importGoods":"石油/天然气/木材","barterPct":"30","dependency":"中"}], "fiscal.income_items": [{"name":"税收","category":"tax","amount":"3000亿","ratio":"58"}]},' + '\n' +
-      '  "delete": {"diplomacy.relations[2]": true}' + '\n' +
+      '  "modify": {"macro.gdp": "5600", "macro.growth_rate": "5.7", "econ.trade[0].exports": "130亿"},' + '\n' +
+      '  "add": {"fiscal.income_items": [{"name":"新税种","category":"tax","amount":"200亿","ratio":"4"}]},' + '\n' +
+      '  "delete": {}' + '\n' +
       '}===end===' + '\n' +
-      'add=向数组追加（第一轮全量输出时也用add）| modify=修改标量值（第一轮首次写入也用modify）| delete=删除字段/数组元素 | time=推进钟表（每轮必须推进）' + '\n' +
+      '解释：GDP增长用modify更新，苏联贸易额用modify按索引更新，新增税种用add（因为原来没有）。' + '\n' +
+      'add=向数组追加（第一轮全量输出时也用add）| modify=修改标量值或数组元素（支持索引路径如 trade[0].exports）| delete=删除字段/数组元素 | time=推进钟表（每轮必须推进）' + '\n' +
       '本地计算字段(AI不输出): fiscal.total_income/expense, fiscal.debt.interest/domestic/foreign,' + '\n' +
       'fiscal.currency.reserves, reserve_items[].ratio, society._score。AI只提供原始明细。' + '\n' +
       '' + '\n' +
@@ -1802,13 +1829,36 @@
       'news: {items:[{media,title,time,body,source,urgent}]}' + '\n' +
       '地图(countryMapData,路径前缀 map. 如 map.regions): regions[{name,color,shape,params:{x,y,w,h|cx,cy,r|verts|xs,ys,width}}], provinces[{id,name,color,x,y}], cities[{name,emoji,x,y}], facilities[{name,emoji,x,y,type}], neighbors[{id,name,color,x,y}]。所有坐标0-39。' + '\n' +
       '' + '\n' +
-      '## 八、时间推进' + '\n' +
+      '## 八、时间推进与实现时间约束' + '\n' +
       '回合制，不随现实流逝。每次===UPDATE===在time字段推进(精确到分钟)。' + '\n' +
       '粒度：几小时(紧急会议)到数月(长期项目)。每次回复必须推进时间。' + '\n' +
       '' + '\n' +
+      '⏱️ 现实时间尺度（强制规则，违反将破坏游戏可信度）：' + '\n' +
+      '工程基建：大型工厂(钢铁/化工/汽车)建设需18-36个月，水利/电站需24-48个月，铁路/公路每百公里需6-12个月。' + '\n' +
+      '  → 一个回合内最多只能推进"已开工项目的进度"，不能"建成"新的大型设施。' + '\n' +
+      '  → infrastructure数组中的Investment应反映当前阶段(比如此轮完成10%投资)，下一轮推进到20%。' + '\n' +
+      '  → 小规模改造(翻新车间/铺设管线)可一个回合完成。' + '\n' +
+      '军事建设：新建陆军师需6-12个月（征兵+训练+装备），新建军舰需24-48个月，战斗机编队需12-18个月。核武器研发需36-60个月。' + '\n' +
+      '  → units数组的新增应跨多个回合逐步推进(如:征召→训练→配装→成军)。一个回合最多新增1个单位或推进1个在建单位。' + '\n' +
+      '科技研发：导弹/航天/计算机技术突破需24-60个月，材料/能源技术需18-36个月。' + '\n' +
+      '经济变化：GDP增长率一个回合内变化不超过±1.5个百分点，失业率变化不超过±1个百分点，通胀变化不超过±2个百分点。' + '\n' +
+      '  → 产业结构调整是渐进过程。出口/进口结构的变化需数年。' + '\n' +
+      '政治/法律：新宪法或重大法律颁布需6-18个月(起草→辩论→表决→实施)，紧急法令可1-7天颁布。' + '\n' +
+      '外交：条约谈判需3-12个月(建交/通商/同盟)，紧急外交(危机/斡旋)可1-7天。' + '\n' +
+      '人口/社会：扫盲率/城市化率等社会指标年变化不超过±3个百分点。' + '\n' +
+      '' + '\n' +
+      '✅ 每回合应推进的时间量参考：' + '\n' +
+      '  - 日常行政/听取汇报 → 推进2-8小时' + '\n' +
+      '  - 内阁会议/政策讨论 → 推进1-3天' + '\n' +
+      '  - 外交活动/签署协议 → 推进3-14天' + '\n' +
+      '  - 启动建设项目/立法进程 → 推进1-6个月' + '\n' +
+      '  - 五年计划/长期战略 → 推进6-12个月' + '\n' +
+      '  - 跨年/跨越数年 → 仅在玩家明确要求时' + '\n' +
+      '' + '\n' +
       '## 九、关键原则' + '\n' +
       '1.严禁AI口吻 2.因果链完整 3.游戏性优先(危机不过密)' + '\n' +
-      '4.历史逻辑 5.增量更新 6.NPC每次发言 7.百分比不带%号(写"85"非"85%")货币用"XXXX亿"';
+      '4.历史逻辑 5.增量更新 6.NPC每次发言 7.百分比不带%号(写"85"非"85%")货币用"XXXX亿" 8.遵守现实时间尺度' + '\n' +
+      '9.数据驱动叙事：当前数据是叙事的唯一权威来源，不要凭空编造与数据矛盾的情节。生成UPDATE时必须以当前数据为基础增量修改。';
 
     function buildAIContext() {
       var ctx = SYSTEM_PROMPT + '\n';
@@ -1852,7 +1902,7 @@
     const DATA_SECTION_MAP = {
       macro: function () { return JSON.stringify(cleanForAI(gameState.macro)); },
       fiscal: function () { return JSON.stringify(cleanForAI({ income_items: gameState.fiscal.income_items, expense_items: gameState.fiscal.expense_items, state_economy: gameState.fiscal.state_economy, debt: { restructuring: gameState.fiscal.debt.restructuring, payments: gameState.fiscal.debt.payments }, currency: { inflation: gameState.fiscal.currency.inflation, exchange_rate: gameState.fiscal.currency.exchange_rate, forex_control: gameState.fiscal.currency.forex_control, reserve_items: gameState.fiscal.currency.reserve_items } })); },
-      politics: function () { return JSON.stringify(cleanForAI({ groups: gameState.council.groups, factions: gameState.council.factions, institutions: gameState.admin.institutions, legal: gameState.legal, parties: gameState.council.parties })); },
+      politics: function () { return JSON.stringify(cleanForAI({ council: gameState.council, admin: { departments: gameState.admin.departments, projects: gameState.admin.projects, institutions: gameState.admin.institutions, civil_servants: gameState.admin.civil_servants, corruption: gameState.admin.corruption }, legal: gameState.legal })); },
       economy: function () { return JSON.stringify(cleanForAI({ trade: gameState.econ.trade, domestic_industries: gameState.econ.domestic_industries, infrastructure: gameState.econ.infrastructure, facilities: gameState.econ.facilities, exports: gameState.econ.exports, imports: gameState.econ.imports })); },
       diplomacy: function () { return JSON.stringify(cleanForAI(gameState.diplomacy)); },
       military: function () { return JSON.stringify(cleanForAI(gameState.military)); },
@@ -1872,7 +1922,7 @@
       if (typeof obj === 'boolean') return obj;
       if (Array.isArray(obj)) return obj.map(cleanForAI);
       var out = {};
-      var skipKeys = ['_grade', '_score', 'total_income', 'total_expense', 'domestic', 'foreign', 'interest', 'reserves', 'ratio', 'seats'];
+      var skipKeys = ['_grade', '_score', 'total_income', 'total_expense', 'domestic', 'foreign', 'interest', 'reserves'];
       for (var k in obj) {
         if (!obj.hasOwnProperty(k)) continue;
         if (skipKeys.indexOf(k) !== -1) continue;
@@ -4150,23 +4200,31 @@
     function setDeep(obj, path, value) {
       var keys = path.split('.');
       var cur = obj;
-      for (var i = 0; i < keys.length - 1; i++) {
-        if (!cur[keys[i]]) cur[keys[i]] = {};
-        cur = cur[keys[i]];
-      }
-      var lastKey = keys[keys.length - 1];
-      // 处理数组索引
-      var arrMatch = lastKey.match(/^(.+)\[(\d+)\]$/);
-      if (arrMatch) {
-        if (!cur[arrMatch[1]]) cur[arrMatch[1]] = [];
-        cur[arrMatch[1]][parseInt(arrMatch[2])] = value;
-      } else {
-        // 保护数组字段不被非数组覆盖
-        if (_ARRAY_FIELDS.indexOf(lastKey) >= 0 && !Array.isArray(value)) {
-          console.warn('setDeep: 数组字段 ' + lastKey + ' 收到非数组值，已忽略:', JSON.stringify(value).substring(0, 80));
-          return;
+      for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        var arrMatch = key.match(/^(.+)\[(\d+)\]$/);
+        if (arrMatch) {
+          var arrName = arrMatch[1];
+          var arrIndex = parseInt(arrMatch[2]);
+          if (!cur[arrName]) cur[arrName] = [];
+          if (i === keys.length - 1) {
+            cur[arrName][arrIndex] = value;
+          } else {
+            if (!cur[arrName][arrIndex]) cur[arrName][arrIndex] = {};
+            cur = cur[arrName][arrIndex];
+          }
+        } else {
+          if (i === keys.length - 1) {
+            if (_ARRAY_FIELDS.indexOf(key) >= 0 && !Array.isArray(value)) {
+              console.warn('setDeep: 数组字段 ' + key + ' 收到非数组值，已忽略:', JSON.stringify(value).substring(0, 80));
+              return;
+            }
+            cur[key] = value;
+          } else {
+            if (!cur[key]) cur[key] = {};
+            cur = cur[key];
+          }
         }
-        cur[lastKey] = value;
       }
     }
 
