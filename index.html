@@ -1817,20 +1817,29 @@
       '  - 汇率: 纯数字如 "2.46"。' + '\n' +
       '' + '\n' +
       '🔄 更新优先级规则（强制）：' + '\n' +
-      '**原则：能改不增，能增不删** — 优先修改现有数据，只有在确实需要新条目时才添加。' + '\n' +
+      '**核心原则：未变不动，变则改之，新则加之，禁随意删**' + '\n' +
+      '  1. 未变化的条目 → 原样保留，不要在UPDATE中提及，也不要删除' + '\n' +
+      '  2. 已有条目发生变化 → 用 modify 修改对应字段，只改变化的部分' + '\n' +
+      '  3. 出现全新条目 → 用 add 追加到数组末尾' + '\n' +
+      '  4. 条目确实消失/终止/废除 → 才用 delete 删除（极少发生）' + '\n' +
       '' + '\n' +
       '标量字段(macro.fiscal.military等单值字段)：' + '\n' +
       '  - 始终使用 modify 操作更新已有值。' + '\n' +
       '  - 例如 GDP增长：modify {"macro.gdp": "5600", "macro.growth_rate": "5.7"}' + '\n' +
       '  - 禁止用 add 操作修改标量。' + '\n' +
+      '  - 未变化的标量字段不要出现在 modify 中。' + '\n' +
       '' + '\n' +
       '数组字段(trade/domestic_industries/policies/units/npcs等)：' + '\n' +
-      '  - 先检查是否已有可更新的条目，再决定是否添加新条目。' + '\n' +
+      '  - 先对比上下文中的已有数据，判断每个条目的状态：' + '\n' +
+      '    · 无变化 → 完全忽略，不写入 UPDATE' + '\n' +
+      '    · 有变化 → 用 modify + 索引路径修改该条目，仅修改变化的字段' + '\n' +
+      '    · 新条目 → 用 add 追加' + '\n' +
+      '    · 确实消亡 → 才用 delete 删除' + '\n' +
       '  - 修改数组中已有条目：使用 modify + 索引路径，如 "econ.trade[0].exports": "130亿"（更新第1个贸易伙伴的出口额）' + '\n' +
       '  - 添加新条目：只有当确实没有匹配项时才用 add 追加。例如 trade 中没有"日本"这个伙伴，才 add 一个新的。' + '\n' +
-      '  - 删除条目：只有条目确实不再存在时才用 delete，如 "econ.trade[2]": true（删除第3个贸易伙伴）。' + '\n' +
+      '  - 删除条目：只有条目确实不再存在时才用 delete，如 "econ.trade[2]": true（删除第3个贸易伙伴）。严禁因数据不全或遗忘而删除已有条目。' + '\n' +
       '' + '\n' +
-      '常用数组的匹配规则：' + '\n' +
+      '常用数组的匹配规则（按这些字段识别是否为同一条目）：' + '\n' +
       '  - trade: 按 partner 字段匹配。更新苏联贸易额 → modify "econ.trade[0].exports"' + '\n' +
       '  - income_items/expense_items: 按 name+category 匹配。更新税收 → modify "fiscal.income_items[0].amount"' + '\n' +
       '  - domestic_industries: 按 name+category 匹配。更新钢铁厂产量 → modify "econ.domestic_industries[1].output"' + '\n' +
@@ -1839,7 +1848,11 @@
       '  - units/equipment_items: 按 name 匹配。更新部队装备 → modify "military.units[0].equipment"' + '\n' +
       '  - council.groups/factions: 按 name 匹配。更新派系影响力 → modify "council.factions[0].influence"' + '\n' +
       '  - npcs: 按 name+role 匹配。更新NPC忠诚度 → modify "npcs[0].loyalty"' + '\n' +
-      '  - news.items: 每次添加新新闻，不修改旧新闻（新闻是历史记录）。' + '\n' +
+      '  - local_gov: 按 name 匹配。更新省份GDP → modify "local_gov[0].gdp"' + '\n' +
+      '  - news.items: 每次添加新新闻，不修改不删除旧新闻（新闻是历史记录）。' + '\n' +
+      '  - map.regions/provinces/cities/facilities/neighbors: 地理要素基本不变，除非战争/条约导致变更，否则不删不改。' + '\n' +
+      '' + '\n' +
+      '⚠️ 数据完整性铁律：上下文中已有的数据，如果你不确定它是否应该变，那就不要变。遗漏更新比错误删除要好得多。' + '\n' +
       '' + '\n' +
       '**第一轮（开局设定）：输出全部字段的完整填充。对每个标量字段使用 modify 置值，对每个数组字段使用 add 一次性追加所有元素。不得留空，不得跳过任何字段。countryMapData 也必须完整填充。**' + '\n' +
       '**后续回合：增量更新，只发送变化部分。**优先使用 modify 更新已有值，仅在确实需要新增条目时才使用 add。示例如下：' + '\n' +
@@ -4457,6 +4470,20 @@
       // delete
       if (updates.delete) {
         Object.keys(updates.delete).forEach(function (path) {
+          // 防误删保护：禁止删除整个数组（路径末段是数组名且不带索引）
+          var lastSeg = path.split('.').pop();
+          var hasIndex = /\[\d+\]/.test(lastSeg);
+          if (!hasIndex && _ARRAY_FIELDS.indexOf(lastSeg) >= 0) {
+            console.warn('[applyUpdates] 拒绝删除整个数组: ' + path + '（应使用数组索引删除单个元素）');
+            return;
+          }
+          // 防误删保护：禁止删除顶层大字段（如 entire econ, military, diplomacy）
+          var topLevel = path.split('.')[0];
+          var protectedTop = ['macro', 'fiscal', 'council', 'admin', 'legal', 'econ', 'military', 'diplomacy', 'society', 'policies', 'local_gov', 'npcs', 'news', 'notes'];
+          if (protectedTop.indexOf(path) >= 0) {
+            console.warn('[applyUpdates] 拒绝删除顶层字段: ' + path);
+            return;
+          }
           changes.push('🗑️ [' + path + ']');
           deleteDeep(gameState, path);
           hasChanges = true;
