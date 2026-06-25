@@ -1442,6 +1442,25 @@
           <div class="startup-section-title">🏛️ 国家信息</div>
           <div class="startup-field"><label>国名</label><input type="text" id="sCountryName" placeholder="填写史实或架空国名">
           </div>
+          <div class="startup-row">
+            <div class="startup-field"><label>开局年份</label><input type="text" id="sStartYear" placeholder="例：1962"></div>
+            <div class="startup-field"><label>开局月份</label><select id="sStartMonth">
+                <option value="1">1月</option>
+                <option value="2">2月</option>
+                <option value="3">3月</option>
+                <option value="4">4月</option>
+                <option value="5">5月</option>
+                <option value="6">6月</option>
+                <option value="7">7月</option>
+                <option value="8">8月</option>
+                <option value="9">9月</option>
+                <option value="10">10月</option>
+                <option value="11">11月</option>
+                <option value="12">12月</option>
+              </select></div>
+            <div class="startup-field"><label>开局日期</label><input type="text" id="sStartDay" placeholder="例：15"
+                style="width:70px"></div>
+          </div>
           <div class="startup-field"><label>背景信息</label><textarea id="sCountryBg"
               placeholder="填写背景信息，可填写架空设定"></textarea></div>
           <div class="startup-field"><label>特殊设定（可选）</label><textarea id="sExtraNotes"
@@ -1589,6 +1608,9 @@
       var cn = document.getElementById('sCountryName').value.trim();
       var cb = document.getElementById('sCountryBg').value.trim();
       var en = document.getElementById('sExtraNotes').value.trim();
+      var sy = document.getElementById('sStartYear').value.trim();
+      var sm = document.getElementById('sStartMonth').value;
+      var sd = document.getElementById('sStartDay').value.trim();
 
       if (!nn && !cn) return null;
 
@@ -1608,13 +1630,22 @@
         if (cb) lines.push('背景：' + cb);
         if (en) lines.push('特殊设定：' + en);
       }
+      if (sy) {
+        var y = parseInt(sy);
+        var m = parseInt(sm) || 1;
+        var d = parseInt(sd) || 1;
+        if (y >= 1945 && y <= 1991) {
+          lines.push('');
+          lines.push('⏰ 开局时间：' + y + '年' + m + '月' + d + '日 08:00');
+        }
+      }
       lines.push('');
       lines.push('=== 系统指令 ===');
       lines.push('请以上述设定为开局初始条件，作为冷战国家领导人模拟器，生成第一轮完整数据输出。');
       lines.push('输出包含两个部分：');
       lines.push('1. 叙事正文：以小说体描写开局场景，包含NPC亮相和内阁会议');
       lines.push('2. ===UPDATE=== 数据块：完整初始化所有gameState和countryMapData字段');
-      lines.push('游戏时间初始值：根据玩家设定决定');
+      lines.push('游戏时间初始值：' + (sy ? (parseInt(sy) + '年' + (parseInt(sm) || 1) + '月' + (parseInt(sd) || 1) + '日') : '根据玩家设定决定'));
       lines.push('阵营：根据背景信息自动判断（华约/西方/不结盟）');
       return lines.join('\n');
     }
@@ -1670,6 +1701,22 @@
       if (startupMode === 'form') {
         var cn = document.getElementById('sCountryName').value.trim();
         if (cn && gameState.country !== cn) gameState.country = cn;
+
+        // 自定义开局时间
+        var sy = document.getElementById('sStartYear').value.trim();
+        var sm = document.getElementById('sStartMonth').value;
+        var sd = document.getElementById('sStartDay').value.trim();
+        if (sy) {
+          var year = parseInt(sy);
+          var month = parseInt(sm) || 1;
+          var day = parseInt(sd) || 1;
+          if (year >= 1945 && year <= 1991) {
+            var dateStr = year + '年' + month + '月' + day + '日';
+            gameTime.date = dateStr;
+            gameTime.time = '08:00';
+            updateTimeDisplay();
+          }
+        }
       }
 
       // 更新界面国家名
