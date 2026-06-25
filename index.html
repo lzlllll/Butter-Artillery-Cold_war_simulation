@@ -777,13 +777,80 @@
     .map-canvas {
       display: block;
       width: 100%;
-      height: 500px;
+      height: 100%;
       background: #0a0a1a;
       cursor: grab;
     }
 
     .map-canvas:active {
       cursor: grabbing;
+    }
+
+    .map-split {
+      display: flex;
+      height: 500px;
+    }
+
+    .map-left {
+      flex: 1;
+      position: relative;
+      min-width: 0;
+      border-right: 1px solid var(--royal-gold);
+    }
+
+    .map-right {
+      width: 340px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background: rgba(0, 0, 0, 0.4);
+    }
+
+    .scene-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--royal-gold);
+      background: rgba(0, 0, 0, 0.3);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .scene-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--royal-gold);
+    }
+
+    .scene-subtitle {
+      font-size: 10px;
+      color: var(--smoke);
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .scene-image-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .scene-image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .scene-placeholder {
+      text-align: center;
+      color: var(--smoke);
+      padding: 20px;
     }
 
     .map-tooltip {
@@ -1523,8 +1590,25 @@
             <div class="legend-item"><span class="legend-emoji">🏭</span><span>设施</span></div>
           </div>
         </div>
-        <canvas id="country-map" class="map-canvas"></canvas>
-        <div class="map-tooltip" id="mapTooltip"></div>
+        <div class="map-split">
+          <div class="map-left">
+            <canvas id="country-map" class="map-canvas"></canvas>
+            <div class="map-tooltip" id="mapTooltip"></div>
+          </div>
+          <div class="map-right">
+            <div class="scene-header">
+              <span class="scene-title">🎬 当前局势</span>
+              <span class="scene-subtitle" id="sceneCaption">等待生成...</span>
+            </div>
+            <div class="scene-image-wrap">
+              <img id="sceneImage" class="scene-image" src="" alt="当前局势画面" style="display:none">
+              <div class="scene-placeholder" id="scenePlaceholder">
+                <div style="font-size:40px;margin-bottom:10px">📷</div>
+                <div style="font-size:12px;color:var(--smoke)">开局后自动生成</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 打字机AI交互区域 -->
@@ -1805,7 +1889,11 @@
       '【行动建议块】用 ===OPTIONS=== 和 ===end=== 包裹的JSON数组。此块必须存在。' + '\n' +
       '格式固定为: ===OPTIONS===\n[{"label":"简短按钮文字","text":"完整输入命令"},...]\n===end===' + '\n' +
       'label为按钮上显示的简短文字(6字以内)，text为点击后填入输入框的完整命令文本。提供3-5个基于当前局势的下回合行动建议。角色扮演口吻，如"召见苏联大使"、"增加军费开支"、"签署贸易协定"。' + '\n' +
-      '禁止事项：禁止省略===UPDATE===块和===OPTIONS===块。禁止将JSON放在代码块中。禁止使用Markdown代码块包裹。禁止添加额外注释。禁止修改分隔符。禁止将数据混入叙事正文。' + '\n' +
+      '【画面提示词】用 ===SCENE=== 和 ===end=== 包裹的一行中文。此块必须存在。' + '\n' +
+      '格式固定为: ===SCENE===\n画面描述\n===end===' + '\n' +
+      '用不超过15个中文字描述本回合最具代表性的场景画面。例如："红场阅兵式"、"街头抗议冲突"、"工厂烟囱林立"、"内阁会议紧张"、"港口货轮云集"。' + '\n' +
+      '画面描述将用于AI生成静态场景图，必须视觉化、具象化，不要抽象概念。' + '\n' +
+      '禁止事项：禁止省略===UPDATE===块、===OPTIONS===块、===SCENE===块。禁止将JSON放在代码块中。禁止使用Markdown代码块包裹。禁止添加额外注释。禁止修改分隔符。禁止将数据混入叙事正文。' + '\n' +
       '' + '\n' +
       '## 六、数据协议' + '\n' +
       '⚠️ 强制数字规则：所有含数值的数据字段必须输出纯数字，不得混合中文。' + '\n' +
@@ -4541,6 +4629,88 @@
     }
 
     // AI模拟响应（带增量更新）
+    function generateScenePrompt() {
+      var parts = ['cold war era', '1960s style'];
+      if (gameState.country && gameState.country !== '等待生成') {
+        parts.push(gameState.country);
+      }
+      var stability = parseFloat(gameState.macro.political_stability);
+      var gdp = gameState.macro.gdp;
+      if (stability < 30) parts.push('political crisis, unrest in streets');
+      else if (stability < 60) parts.push('tense atmosphere, military presence');
+      else parts.push('stable regime, orderly streets');
+
+      var growth = parseFloat(gameState.macro.growth_rate);
+      if (growth > 6) parts.push('economic boom, construction cranes, factories');
+      else if (growth < 1) parts.push('economic stagnation, empty shops');
+
+      if (gameState.military && parseFloat(gameState.military.strength) > 70) {
+        parts.push('military parade, soldiers, tanks');
+      }
+
+      if (gameState.econ && gameState.econ.trade && gameState.econ.trade.length > 0) {
+        parts.push('busy port, cargo ships, trade');
+      }
+
+      var year = gameTime.date ? gameTime.date.replace(/年.*$/, '') : '1962';
+      parts.push('year ' + year);
+      parts.push('cinematic, atmospheric, realistic, historical photography');
+      parts.push('cold war aesthetic, sepia tones, dramatic lighting');
+
+      return parts.join(', ');
+    }
+
+    var _lastScenePrompt = '';
+
+    function buildScenePrompt(customPrompt) {
+      var base = customPrompt || generateScenePrompt();
+      var suffix = 'cold war era, 1960s, cinematic, atmospheric, realistic, historical photography, dramatic lighting, sepia tones';
+      var year = gameTime.date ? gameTime.date.replace(/年.*$/, '') : '';
+      if (year) suffix = 'year ' + year + ', ' + suffix;
+      if (gameState.country && gameState.country !== '等待生成') {
+        suffix = gameState.country + ', ' + suffix;
+      }
+      return base + ', ' + suffix;
+    }
+
+    function updateSceneImage(customPrompt) {
+      var displayPrompt = customPrompt || generateScenePrompt();
+      var fullPrompt = buildScenePrompt(displayPrompt);
+      if (fullPrompt === _lastScenePrompt) return;
+      _lastScenePrompt = fullPrompt;
+
+      var img = document.getElementById('sceneImage');
+      var placeholder = document.getElementById('scenePlaceholder');
+      var caption = document.getElementById('sceneCaption');
+
+      if (!img) return;
+
+      var seed = Math.floor(Math.random() * 100000);
+      var encodedPrompt = encodeURIComponent(fullPrompt);
+      var url = 'https://image.pollinations.ai/prompt/' + encodedPrompt + '?width=512&height=768&seed=' + seed + '&nologo=true&enhance=true';
+
+      if (caption) {
+        var shortCaption = displayPrompt.length > 50 ? displayPrompt.substring(0, 47) + '...' : displayPrompt;
+        caption.textContent = shortCaption;
+        caption.title = fullPrompt;
+      }
+
+      img.style.opacity = '0.3';
+      img.onload = function () {
+        img.style.display = 'block';
+        img.style.opacity = '1';
+        img.style.transition = 'opacity 0.5s ease';
+        if (placeholder) placeholder.style.display = 'none';
+      };
+      img.onerror = function () {
+        img.style.opacity = '1';
+        if (placeholder && placeholder.style.display !== 'none') {
+          placeholder.innerHTML = '<div style="font-size:30px;margin-bottom:8px">⚠️</div><div style="font-size:11px;color:var(--smoke)">画面加载失败</div>';
+        }
+      };
+      img.src = url;
+    }
+
     function generateAIResponse(userText, aiContext) {
       var lower = userText.toLowerCase();
 
@@ -4613,6 +4783,7 @@
       }
 
       // 综合/默认
+      var defaultScenes = ['内阁会议厅', '首都街道俯瞰', '政府大楼门前', '阅兵广场', '工业区烟囱', '港口货轮', '地下指挥室'];
       return {
         text: '系统已收到查询。回复中可包含 <code>===UPDATE===</code> 块推送数据，含 <code>time: { date: "1965年1月2日", time: "14:30" }</code> 推进游戏时钟。当前时间：' + gameTime.date + ' ' + gameTime.time + '。<br><span style="color:var(--smoke);font-size:11px">完整系统提示词(' + SYSTEM_PROMPT.length + '字符)已随 <code>buildAIContext()</code> 发送。</span>',
         updates: null,
@@ -4620,7 +4791,8 @@
           { label: '查看财政', text: '查看我国财政状况' },
           { label: '召开内阁会议', text: '召开内阁会议，讨论当前局势' },
           { label: '检阅军队', text: '检阅军队，了解国防力量' }
-        ]
+        ],
+        scene: defaultScenes[Math.floor(Math.random() * defaultScenes.length)]
       };
     }
 
@@ -4680,6 +4852,11 @@
           }
           addTypewriterMessage(aiMsg, 'ai');
           renderSuggestions(response.options || null);
+          if (response.scene) {
+            updateSceneImage(response.scene);
+          } else {
+            updateSceneImage();
+          }
           typewriterSend.disabled = false;
         }, 600 + Math.random() * 800);
         return;
@@ -4692,8 +4869,16 @@
       function handleProResponse(proResult) {
         loadingMsg.remove();
         var proContent = proResult.choices && proResult.choices[0] ? proResult.choices[0].message.content : '';
+        // 解析 ===SCENE=== 画面提示词块
+        var scenePrompt = '';
+        var sceneMatch = proContent.match(/===SCENE===\s*([\s\S]*?)\s*===end===/);
+        if (sceneMatch) {
+          scenePrompt = sceneMatch[1].trim();
+        }
+        // 从正文移除 SCENE 块，避免干扰后续解析
+        var cleanForParse = proContent.replace(/===SCENE===[\s\S]*?===end===/g, '');
         // 解析 ===OPTIONS=== 块（在 ===UPDATE=== 之前解析，避免被UPDATE的分割干扰）
-        var optionsParts = proContent.split('===OPTIONS===');
+        var optionsParts = cleanForParse.split('===OPTIONS===');
         var cleanContent = optionsParts[0];
         var options = null;
         if (optionsParts.length > 1) {
@@ -4716,6 +4901,12 @@
         addTypewriterMessage(aiMsg, 'ai');
         // 渲染行动建议
         renderSuggestions(options);
+        // 更新场景画面（使用AI返回的提示词）
+        if (scenePrompt) {
+          updateSceneImage(scenePrompt);
+        } else {
+          updateSceneImage();
+        }
         typewriterSend.disabled = false;
       }
 
