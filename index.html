@@ -713,6 +713,17 @@
       margin-top: 4px;
     }
 
+    .news-section-header {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--royal-gold);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      padding: 12px 0 6px;
+      margin-top: 8px;
+      border-bottom: 1px solid rgba(201, 162, 39, 0.2);
+    }
+
     /* 右侧主列 */
     .main-column {
       flex: 1;
@@ -1974,7 +1985,14 @@
       'local_gov: [{name,population,gdp,industry,resources,status,issues,details}] 一级行政区(省/州)' + '\n' +
       'npcs: [{name,role,stance,loyalty,status,notes}] 角色档案(本地存储,AI增量追加)' + '\n' +
       'notes: ["待办事项字符串"]' + '\n' +
-      'news: {items:[{media,title,time,body,source,urgent}]}' + '\n' +
+      'news: {items:[{media,title,time,body,source,urgent,type}]}' + '\n' +
+      '重要：type字段表示新闻类型，值为"domestic"（国内新闻）或"international"（国际新闻）。国内新闻报道本国事件，国际新闻报道他国事件和史实事件。' + '\n' +
+      '⚠️ 国际新闻生成规则：每回合你必须根据当前游戏日期，生成1-3条符合该历史时期真实发生的国际新闻。' + '\n' +
+      '  - 必须准确对应历史时间：比如1962年10月应该有古巴导弹危机相关新闻，1969年7月应该有阿波罗登月新闻。' + '\n' +
+      '  - 国际新闻可以是：美苏对峙事件、其他国家的重大事件、战争/冲突、科技突破、外交事件、经济危机等。' + '\n' +
+      '  - 每回合推进时间跨越较大时（如超过1个月），应生成多条对应时间段的国际新闻。' + '\n' +
+      '  - 已发生过的史实事件不要重复生成。' + '\n' +
+      '  - 所有国际新闻的 type 字段必须设为 "international"。' + '\n' +
       '地图(countryMapData,路径前缀 map. 如 map.regions): regions[{name,color,shape,params:{x,y,w,h|cx,cy,r|verts|xs,ys,width}}], provinces[{id,name,color,x,y}], cities[{name,emoji,x,y}], facilities[{name,emoji,x,y,type}], neighbors[{id,name,color,x,y}]。所有坐标0-39。' + '\n' +
       '' + '\n' +
       '## 八、时间推进与实现时间约束' + '\n' +
@@ -3479,19 +3497,40 @@
         body.innerHTML = '<div class="news-item-card" style="text-align:center;color:var(--smoke);padding:30px 10px">等待生成<br><span style="font-size:11px">AI推演后将自动更新</span></div>';
         return;
       }
+
+      var domestic = items.filter(function (n) { return n.type === 'domestic' || !n.type; });
+      var international = items.filter(function (n) { return n.type === 'international'; });
+
       var html = '';
-      items.forEach(function (item) {
-        var cls = item.urgent === '是' ? ' news-item-card urgent' : 'news-item-card';
-        html += '<div class="' + cls + '">';
-        // 标题行: 标题 + 时间
-        html += '<div class="news-title-line"><span class="news-title-text">' + (item.title || '未命名新闻') + '</span>';
-        html += '<span class="news-time">' + (item.time || '--') + '</span></div>';
-        // 正文内容
-        if (item.body) html += '<div class="news-body-text">' + item.body + '</div>';
-        if (!item.body && item.content) html += '<div class="news-body-text">' + item.content + '</div>';
-        if (item.source) html += '<div class="news-source">来源: ' + item.source + '</div>';
-        html += '</div>';
-      });
+
+      if (domestic.length > 0) {
+        html += '<div class="news-section-header">📰 国内新闻</div>';
+        domestic.forEach(function (item) {
+          var cls = item.urgent === '是' ? ' news-item-card urgent' : 'news-item-card';
+          html += '<div class="' + cls + '">';
+          html += '<div class="news-title-line"><span class="news-title-text">' + (item.title || '未命名新闻') + '</span>';
+          html += '<span class="news-time">' + (item.time || '--') + '</span></div>';
+          if (item.body) html += '<div class="news-body-text">' + item.body + '</div>';
+          if (!item.body && item.content) html += '<div class="news-body-text">' + item.content + '</div>';
+          if (item.source) html += '<div class="news-source">来源: ' + item.source + '</div>';
+          html += '</div>';
+        });
+      }
+
+      if (international.length > 0) {
+        html += '<div class="news-section-header">🌍 国际新闻</div>';
+        international.forEach(function (item) {
+          var cls = item.urgent === '是' ? ' news-item-card urgent' : 'news-item-card';
+          html += '<div class="' + cls + '">';
+          html += '<div class="news-title-line"><span class="news-title-text">' + (item.title || '未命名新闻') + '</span>';
+          html += '<span class="news-time">' + (item.time || '--') + '</span></div>';
+          if (item.body) html += '<div class="news-body-text">' + item.body + '</div>';
+          if (!item.body && item.content) html += '<div class="news-body-text">' + item.content + '</div>';
+          if (item.source) html += '<div class="news-source">来源: ' + item.source + '</div>';
+          html += '</div>';
+        });
+      }
+
       body.innerHTML = html;
     }
 
@@ -4181,38 +4220,74 @@
     var updateLog = [];
 
     // ==== AI 记忆系统 ====
-    var chatHistory = [];       // 原始聊天记录 [{role:'user'|'ai'|'system', text:'...', time:'...'}]
+    var chatHistory = [];       // 原始聊天记录 [{role:'user'|'ai'|'system', text:'...', html:'...', time:'...', roundIndex: N}]
     var summaries = [];         // 历史总结 [{range:'#1-#10', text:'...'}]  — 被压缩的旧对话
+    var currentRound = 0;       // 当前回合索引（每轮 = 用户消息 + AI回复）
     const MAX_HISTORY = 10;     // 最多保留10条原始记录
     const RECENT_CONTEXT = 4;   // 发送最近4条给AI
     const MAX_SUMMARIES = 10;   // 总结条目超过10条则再次压缩
+    const KEEP_ROUNDS = 3;      // 保留最近几轮的聊天和新闻
+
+    function renderChatHistory() {
+      var output = document.getElementById('typewriterOutput');
+      if (!output || chatHistory.length === 0) return;
+      output.innerHTML = '';
+      chatHistory.forEach(function (entry) {
+        var msg = document.createElement('div');
+        msg.className = 'typewriter-msg ' + entry.role;
+        msg.innerHTML = entry.html || entry.text;
+        output.appendChild(msg);
+      });
+      output.scrollTop = output.scrollHeight;
+    }
+
+    var archivedChat = [];
+    var archivedNews = [];
+
+    function archiveOldData() {
+      if (currentRound <= KEEP_ROUNDS) return;
+      var cutoffRound = currentRound - KEEP_ROUNDS;
+
+      var oldChat = chatHistory.filter(function (e) { return e.roundIndex < cutoffRound; });
+      if (oldChat.length > 0) {
+        archivedChat = archivedChat.concat(oldChat);
+        chatHistory = chatHistory.filter(function (e) { return e.roundIndex >= cutoffRound; });
+        localStorage.setItem('coldwar_archived_chat', JSON.stringify(archivedChat));
+      }
+
+      var oldNews = gameState.news.items.filter(function (n) { return n.roundAdded && n.roundAdded < cutoffRound; });
+      if (oldNews.length > 0) {
+        archivedNews = archivedNews.concat(oldNews);
+        gameState.news.items = gameState.news.items.filter(function (n) { return !n.roundAdded || n.roundAdded >= cutoffRound; });
+        localStorage.setItem('coldwar_archived_news', JSON.stringify(archivedNews));
+      }
+
+      renderNewsSidebar();
+    }
 
     // 压缩旧聊天记录为摘要
     function compressHistory() {
-      // 只处理超过 MAX_HISTORY 的旧消息
-      while (chatHistory.length > MAX_HISTORY) {
-        // 取最旧的一批（10条）压缩
-        var batch = chatHistory.splice(0, Math.min(10, chatHistory.length - RECENT_CONTEXT));
-        if (batch.length === 0) break;
+      if (chatHistory.length <= RECENT_CONTEXT) return;
 
-        var summary = '【历史摘要 #' + (summaries.length + 1) + '】时间范围: ' +
-          (batch[0].time || '?') + ' ~ ' + (batch[batch.length - 1].time || '?') + '\n';
-        batch.forEach(function (m) {
-          var label = m.role === 'user' ? '领导人' : m.role === 'ai' ? '国务院' : '系统';
-          var txt = m.text.replace(/<[^>]+>/g, '').substring(0, 120);
-          summary += label + ': ' + txt + '\n';
-        });
-        summary += '(以上为历史存档，已压缩)';
-        summaries.push({ range: '#' + (summaries.length + 1), text: summary });
+      var batch = chatHistory.splice(0, Math.min(10, chatHistory.length - RECENT_CONTEXT));
+      if (batch.length === 0) return;
 
-        // 总结条目本身也有限制
-        while (summaries.length > MAX_SUMMARIES) {
-          var oldBatch = summaries.splice(0, 5);
-          var meta = '【元摘要】合并了以下5段历史：' + '\n';
-          oldBatch.forEach(function (s) { meta += s.range + ': ' + s.text.substring(0, 80) + '...' + '\n'; });
-          meta += '(以上元摘要，已进一步压缩)';
-          summaries.push({ range: 'META#' + (summaries.length + 1), text: meta });
-        }
+      var summary = '【历史摘要 #' + (summaries.length + 1) + '】时间范围: ' +
+        (batch[0].time || '?') + ' ~ ' + (batch[batch.length - 1].time || '?') + '\n';
+      batch.forEach(function (m) {
+        var label = m.role === 'user' ? '领导人' : m.role === 'ai' ? '国务院' : '系统';
+        var txt = m.text.replace(/<[^>]+>/g, '').substring(0, 120);
+        summary += label + ': ' + txt + '\n';
+      });
+      summary += '(以上为历史存档，已压缩)';
+      summaries.push({ range: '#' + (summaries.length + 1), text: summary });
+
+      while (summaries.length > MAX_SUMMARIES) {
+        var oldBatch = summaries.splice(0, 5);
+        var meta = '【元摘要】合并了以下5段历史：' + '\n';
+        oldBatch.forEach(function (s) { meta += s.range + ': ' + s.text.substring(0, 80) + '...' + '\n'; });
+        meta += '(以上元摘要，已进一步压缩)';
+        summaries.push({ range: 'META#' + (summaries.length + 1), text: meta });
       }
     }
 
@@ -4322,8 +4397,14 @@
         chatHistory.push({
           role: type === 'user' ? 'user' : 'ai',
           text: plainText.substring(0, 200),
-          time: gameTime.date + ' ' + gameTime.time
+          html: text,
+          time: gameTime.date + ' ' + gameTime.time,
+          roundIndex: currentRound
         });
+        if (type === 'ai') {
+          currentRound++;
+          archiveOldData();
+        }
         compressHistory();
         saveToStorage();
       }
@@ -4517,8 +4598,16 @@
           var existing = getDeep(gameState, path);
           if (Array.isArray(existing)) {
             if (Array.isArray(value)) {
-              value.forEach(function (item) { existing.push(item); });
+              value.forEach(function (item) {
+                if (path === 'news.items' && !item.roundAdded) {
+                  item.roundAdded = currentRound;
+                }
+                existing.push(item);
+              });
             } else {
+              if (path === 'news.items' && !value.roundAdded) {
+                value.roundAdded = currentRound;
+              }
               existing.push(value);
             }
             changes.push('➕ [' + path + ']: +' + (Array.isArray(value) ? value.length : 1) + '条');
@@ -5106,6 +5195,9 @@
       dataLog = [];
       chatHistory = [];
       summaries = [];
+      archivedChat = [];
+      archivedNews = [];
+      currentRound = 0;
       lastUserText = '';
       // 重置国家地图
       countryMapData.regions = [];
@@ -5171,7 +5263,10 @@
         updateLog: updateLog,
         dataLog: dataLog,
         chatHistory: chatHistory,
+        archivedChat: archivedChat,
+        archivedNews: archivedNews,
         summaries: summaries,
+        currentRound: currentRound,
         apiSettings: apiSettings
       };
     }
@@ -5218,12 +5313,18 @@
           dataLog = data.dataLog || [];
           // 恢复聊天记忆
           chatHistory = data.chatHistory || [];
+          archivedChat = data.archivedChat || [];
+          archivedNews = data.archivedNews || [];
           summaries = data.summaries || [];
+          currentRound = data.currentRound || 0;
           // 恢复API设置
           if (data.apiSettings) { apiSettings = data.apiSettings; saveApiConfigToStorage(); }
           updateStatusBar();
-          typewriterOutput.innerHTML = '<div class="typewriter-msg system">存档已恢复。游戏时间：<b>' + gameTime.date + ' ' + gameTime.time + '</b>。共 ' + updateLog.length + ' 条变更，' + chatHistory.length + ' 条聊天记录。</div>';
-          addTypewriterMessage('📂 存档导入成功。所有面板数据及聊天记忆已恢复。', 'system');
+          renderChatHistory();
+          var archiveInfo = '';
+          if (archivedChat.length > 0) archiveInfo += '，归档聊天' + archivedChat.length + '条';
+          if (archivedNews.length > 0) archiveInfo += '，归档新闻' + archivedNews.length + '条';
+          addTypewriterMessage('📂 存档导入成功。游戏时间：<b>' + gameTime.date + ' ' + gameTime.time + '</b>。共 ' + updateLog.length + ' 条变更，' + chatHistory.length + ' 条聊天记录' + archiveInfo + '。', 'system');
         } catch (err) {
           addTypewriterMessage('❌ 存档文件解析失败：' + err.message, 'system');
         }
